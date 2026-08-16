@@ -11,7 +11,7 @@
 
 window.BSIDE_CONFIG = {
   // Paste your Spotify Client ID between the quotes:
-  SPOTIFY_CLIENT_ID: "",
+  SPOTIFY_CLIENT_ID: "27f0c7a556594be0bfa484b9c3644496",
 
   // Spotify permissions we ask for (read-only, just to see what's playing):
   SPOTIFY_SCOPES: "user-read-currently-playing user-read-playback-state user-read-recently-played",

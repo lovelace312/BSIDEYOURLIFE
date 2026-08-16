@@ -1,19 +1,20 @@
 // ============================================================
 //  B-Side main app: camera, location, timestamp, and composing
-//  the final "memory card" image.
+//  the final "now playing" card image.
 // ============================================================
 
-// Grab the elements we need.
 const el = (id) => document.getElementById(id);
 const preview = el("preview");
 const canvas = el("canvas");
-const nowPlayingBox = el("nowPlaying");
+const liveCard = el("liveCard");
 const status = el("status");
 
 let stream = null;             // the live camera stream
 let facing = "environment";    // "environment" = rear camera, "user" = front
 let currentTrack = null;       // last fetched Spotify track
-let captured = false;          // are we showing a photo (vs live preview)?
+let lastPlace = "";            // cached location name for the preview
+let lastCoords = null;
+let captured = false;
 
 // ---------- Spotify button ----------
 async function refreshSpotifyUI() {
@@ -27,13 +28,13 @@ async function refreshSpotifyUI() {
     btn.textContent = "Connect Spotify";
     btn.classList.remove("connected");
     el("manualSong").hidden = false;     // let the user type a song instead
+    showTrackInCard(readManualSong());
   }
 }
 
 el("spotifyBtn").addEventListener("click", () => {
   if (Spotify.isConnected()) {
     Spotify.logout();
-    nowPlayingBox.hidden = true;
     refreshSpotifyUI();
   } else {
     Spotify.login();
@@ -42,21 +43,25 @@ el("spotifyBtn").addEventListener("click", () => {
 
 async function updateNowPlaying() {
   try {
-    const track = await Spotify.getNowPlaying();
-    currentTrack = track;
-    if (track) {
-      el("npTitle").textContent = track.title;
-      el("npArtist").textContent = track.artist;
-      el("npArt").src = track.artUrl || "";
-      nowPlayingBox.hidden = false;
-    } else {
-      nowPlayingBox.hidden = true;
-      status.textContent = "Spotify connected, but nothing is playing right now.";
-    }
+    currentTrack = await Spotify.getNowPlaying();
+    showTrackInCard(currentTrack);
+    if (!currentTrack) status.textContent = "Spotify connected — play a song to see it here.";
   } catch (e) {
     console.error(e);
   }
 }
+
+// Reflect a track in the live card's text.
+function showTrackInCard(track) {
+  el("npTitle").textContent = track && track.title ? track.title : "No song";
+  el("npArtist").textContent = track && track.artist ? track.artist : "—";
+  el("npAlbum").textContent = track && track.album ? track.album : "—";
+}
+
+// Keep the manual inputs live-updating the card as you type.
+["manualTitle", "manualArtist", "manualAlbum"].forEach((id) =>
+  el(id).addEventListener("input", () => showTrackInCard(readManualSong()))
+);
 
 // ---------- Camera ----------
 async function startCamera() {
@@ -67,8 +72,6 @@ async function startCamera() {
       audio: false,
     });
     preview.srcObject = stream;
-    preview.hidden = false;
-    canvas.hidden = true;
   } catch (e) {
     console.error(e);
     status.textContent = "Camera unavailable — tap the shutter to pick a photo instead.";
@@ -99,8 +102,6 @@ function getLocation() {
   });
 }
 
-// Turn coordinates into a friendly place name using the free
-// OpenStreetMap Nominatim service.
 async function placeName(coords) {
   if (!coords) return "";
   try {
@@ -116,25 +117,33 @@ async function placeName(coords) {
   }
 }
 
+// Build the "place · time" footer string.
+function footerText(place, when) {
+  const stamp = when.toLocaleString(undefined, {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit",
+  });
+  return place ? `${place}  ·  ${stamp}` : stamp;
+}
+
+// Fetch location once up front so the preview footer looks complete.
+async function primeLocation() {
+  lastCoords = await getLocation();
+  lastPlace = await placeName(lastCoords);
+  el("metaLine").textContent = footerText(lastPlace, new Date());
+}
+
 // ---------- Shutter: take the photo ----------
 el("shutterBtn").addEventListener("click", async () => {
-  // If the live camera never started, fall back to the file picker.
-  if (!stream) {
-    el("fileInput").click();
-    return;
-  }
+  if (!stream) { el("fileInput").click(); return; }   // no webcam → file picker
   status.textContent = "Capturing…";
 
-  // Refresh the song at the exact moment of capture.
   if (Spotify.isConnected()) await updateNowPlaying();
   else currentTrack = readManualSong();
 
-  // Gather location + time in parallel with nothing blocking the shot.
-  const coords = await getLocation();
-  const place = await placeName(coords);
-  const when = new Date();
-
-  drawCard(preview, currentTrack, place, when);
+  // Refresh location if we never got it, then compose.
+  if (!lastCoords) { lastCoords = await getLocation(); lastPlace = await placeName(lastCoords); }
+  await drawCard(preview, currentTrack, lastPlace, new Date());
   finishShot();
 });
 
@@ -145,9 +154,8 @@ el("fileInput").addEventListener("change", async (e) => {
   img.onload = async () => {
     if (Spotify.isConnected()) await updateNowPlaying();
     else currentTrack = readManualSong();
-    const coords = await getLocation();
-    const place = await placeName(coords);
-    drawCard(img, currentTrack, place, new Date());
+    if (!lastCoords) { lastCoords = await getLocation(); lastPlace = await placeName(lastCoords); }
+    await drawCard(img, currentTrack, lastPlace, new Date());
     finishShot();
   };
   img.src = URL.createObjectURL(file);
@@ -156,16 +164,17 @@ el("fileInput").addEventListener("change", async (e) => {
 function readManualSong() {
   const title = el("manualTitle").value.trim();
   const artist = el("manualArtist").value.trim();
+  const album = el("manualAlbum").value.trim();
   if (!title && !artist) return null;
-  return { title: title || "Untitled", artist, album: "", artUrl: "" };
+  return { title: title || "Untitled", artist, album, artUrl: "" };
 }
 
 function finishShot() {
   captured = true;
   stopCamera();
-  preview.hidden = true;
+  liveCard.hidden = true;
   canvas.hidden = false;
-  nowPlayingBox.hidden = true;
+  el("manualSong").hidden = true;
   el("shutterBtn").hidden = true;
   el("switchBtn").hidden = true;
   el("retakeBtn").hidden = false;
@@ -175,6 +184,8 @@ function finishShot() {
 
 el("retakeBtn").addEventListener("click", () => {
   captured = false;
+  liveCard.hidden = false;
+  canvas.hidden = true;
   el("shutterBtn").hidden = false;
   el("switchBtn").hidden = false;
   el("retakeBtn").hidden = true;
@@ -183,85 +194,164 @@ el("retakeBtn").addEventListener("click", () => {
   refreshSpotifyUI();
 });
 
-// ---------- Compose the final card onto the canvas ----------
+// ============================================================
+//  Compose the final card onto the canvas: a square photo on
+//  top, then song / artist / album, player controls, and a
+//  small location · time footer — like a music-app share card.
+// ============================================================
 async function drawCard(source, track, place, when) {
-  // Match the canvas to the photo's real pixels (portrait-friendly).
-  const sw = source.videoWidth || source.naturalWidth || 1080;
-  const sh = source.videoHeight || source.naturalHeight || 1440;
-  canvas.width = sw;
-  canvas.height = sh;
+  const W = 1080;                       // card width in pixels
+  const u = W / 1080;                   // scale unit (in case W changes)
+  const margin = 60 * u;                // gap around the framed photo
+  const photo = W - margin * 2;         // square photo size
+  const photoBottom = margin + photo;   // y where the photo ends
+  const H = photoBottom + 700 * u;      // room for text + controls below
+
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d");
 
-  // 1) The photo itself.
-  ctx.drawImage(source, 0, 0, sw, sh);
+  // Card background
+  ctx.fillStyle = "#12121c";
+  ctx.fillRect(0, 0, W, H);
 
-  // 2) A gradient scrim at the bottom so text stays readable.
-  const scrimH = sh * 0.34;
-  const grad = ctx.createLinearGradient(0, sh - scrimH, 0, sh);
-  grad.addColorStop(0, "rgba(0,0,0,0)");
-  grad.addColorStop(1, "rgba(0,0,0,0.82)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, sh - scrimH, sw, scrimH);
+  // 1) Square, center-cropped photo — framed with rounded corners + shadow.
+  drawFramedPhoto(ctx, source, margin, margin, photo, 28 * u);
 
-  const pad = Math.round(sw * 0.055);
-  const unit = sw / 1080; // scale text to any resolution
-  let y = sh - pad;
+  ctx.textAlign = "center";
+  const cx = W / 2;
+  let y = photoBottom + 92 * u;
 
-  // 3) Timestamp + place (bottom-most line).
-  const stamp = when.toLocaleString(undefined, {
-    weekday: "short", month: "short", day: "numeric",
-    hour: "numeric", minute: "2-digit",
-  });
-  const footer = place ? `${stamp}  ·  ${place}` : stamp;
-  ctx.fillStyle = "rgba(255,255,255,0.82)";
-  ctx.font = `${Math.round(30 * unit)}px -apple-system, "Segoe UI", sans-serif`;
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText(footer, pad, y);
-  y -= Math.round(52 * unit);
-
-  // 4) Song artist.
-  if (track && track.artist) {
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.font = `${Math.round(34 * unit)}px -apple-system, "Segoe UI", sans-serif`;
-    ctx.fillText(track.artist, pad + Math.round(96 * unit), y);
-    y -= Math.round(44 * unit);
-  }
-
-  // 5) Song title (bold).
-  const title = track ? track.title : "No song";
+  // 2) Song title (bold) — wraps to at most two lines.
   ctx.fillStyle = "#ffffff";
-  ctx.font = `700 ${Math.round(46 * unit)}px -apple-system, "Segoe UI", sans-serif`;
-  ctx.fillText(title, pad + Math.round(96 * unit), y);
+  ctx.font = `700 ${52 * u}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  const titleLH = 58 * u;
+  const titleLines = wrapLines(ctx, track ? track.title : "No song", W - 120 * u, 2);
+  titleLines.forEach((line, i) => ctx.fillText(line, cx, y + i * titleLH));
+  y += (titleLines.length - 1) * titleLH;   // push everything below down if it wrapped
 
-  // 6) Album art thumbnail to the left of the song text.
-  if (track && track.artUrl) {
-    try {
-      const art = await loadImage(track.artUrl);
-      const size = Math.round(80 * unit);
-      const ax = pad;
-      const ay = y - Math.round(56 * unit);
-      roundRect(ctx, ax, ay, size, size, Math.round(12 * unit));
-      ctx.save();
-      ctx.clip();
-      ctx.drawImage(art, ax, ay, size, size);
-      ctx.restore();
-    } catch { /* album art is optional */ }
-  }
+  // 3) Artist.
+  y += 58 * u;
+  ctx.fillStyle = "#a0a0b0";
+  ctx.font = `400 ${34 * u}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillText(fit(ctx, track && track.artist ? track.artist : "—", W - 120 * u), cx, y);
 
-  // 7) Little B-Side mark, top-left.
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.font = `800 ${Math.round(30 * unit)}px -apple-system, "Segoe UI", sans-serif`;
-  ctx.fillText("B‑SIDE", pad, pad + Math.round(28 * unit));
+  // 4) Album.
+  y += 40 * u;
+  ctx.fillStyle = "#6f6f80";
+  ctx.font = `400 ${27 * u}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillText(fit(ctx, track && track.album ? track.album : "—", W - 120 * u), cx, y);
+
+  // 5) Decorative progress bar.
+  y += 56 * u;
+  const barW = W - 160 * u, barX = (W - barW) / 2, barH = 8 * u;
+  roundRect(ctx, barX, y, barW, barH, barH / 2);
+  ctx.fillStyle = "rgba(255,255,255,0.14)"; ctx.fill();
+  const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
+  grad.addColorStop(0, "#1db954"); grad.addColorStop(1, "#7c5cff");
+  roundRect(ctx, barX, y, barW * 0.38, barH, barH / 2);
+  ctx.fillStyle = grad; ctx.fill();
+
+  // 6) Player controls: prev · play · next.
+  y += 78 * u;
+  drawSkip(ctx, cx - 150 * u, y, 26 * u, false);
+  drawSkip(ctx, cx + 150 * u, y, 26 * u, true);
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath(); ctx.arc(cx, y, 40 * u, 0, Math.PI * 2); ctx.fill();
+  drawTriangle(ctx, cx + 4 * u, y, 18 * u, "#000");   // play glyph
+
+  // 7) Location · time footer, small.
+  y += 96 * u;
+  ctx.fillStyle = "#6f6f80";
+  ctx.font = `400 ${24 * u}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillText(footerText(place, when), cx, y);
+
+  // 8) B-Side mark, tucked into the photo's top-left corner.
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
+  ctx.font = `800 ${30 * u}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.fillText("B‑SIDE", margin + 26 * u, margin + 50 * u);
 }
 
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous"; // needed so we can export the canvas
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+// --- drawing helpers ---
+// Draw a center-cropped square photo with rounded corners and a soft shadow.
+function drawFramedPhoto(ctx, src, x, y, size, radius) {
+  ctx.save();
+  // Soft drop shadow cast by the frame.
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 40 * (size / 960);
+  ctx.shadowOffsetY = 18 * (size / 960);
+  roundRect(ctx, x, y, size, size, radius);
+  ctx.fillStyle = "#000";
+  ctx.fill();
+  ctx.restore();
+
+  // Clip to the rounded square, then paint the cropped photo inside.
+  ctx.save();
+  roundRect(ctx, x, y, size, size, radius);
+  ctx.clip();
+  drawSquare(ctx, src, x, y, size);
+  ctx.restore();
+}
+
+function drawSquare(ctx, src, x, y, size) {
+  const sw = src.videoWidth || src.naturalWidth || size;
+  const sh = src.videoHeight || src.naturalHeight || size;
+  const s = Math.min(sw, sh);
+  ctx.drawImage(src, (sw - s) / 2, (sh - s) / 2, s, s, x, y, size, size);
+}
+
+// Trim text with an ellipsis so it never overflows the card.
+function fit(ctx, text, maxW) {
+  if (!text) return "";
+  if (ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+  return t + "…";
+}
+
+// Break text into up to `maxLines` lines that each fit `maxW`.
+// The final line is ellipsized if there's still text left over.
+function wrapLines(ctx, text, maxW, maxLines) {
+  const words = (text || "").split(/\s+/).filter(Boolean);
+  if (!words.length) return [""];
+  const lines = [];
+  let cur = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const test = cur + " " + words[i];
+    if (ctx.measureText(test).width <= maxW) {
+      cur = test;                                   // word fits on this line
+    } else if (lines.length < maxLines - 1) {
+      lines.push(cur); cur = words[i];              // start a new line
+    } else {
+      cur = cur + " " + words.slice(i).join(" ");   // out of lines: cram the rest
+      break;
+    }
+  }
+  lines.push(fit(ctx, cur, maxW));                  // ensure the last line fits
+  return lines;
+}
+
+function drawTriangle(ctx, cx, cy, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.6, cy - r);
+  ctx.lineTo(cx - r * 0.6, cy + r);
+  ctx.lineTo(cx + r, cy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// A skip-forward / skip-back glyph (two triangles + a bar).
+function drawSkip(ctx, cx, cy, r, forward) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (!forward) ctx.scale(-1, 1);
+  ctx.fillStyle = "#ffffff";
+  drawTriangle(ctx, -r * 0.2, 0, r * 0.7, "#ffffff");
+  drawTriangle(ctx, r * 0.55, 0, r * 0.7, "#ffffff");
+  ctx.fillRect(r * 0.95, -r * 0.7, r * 0.28, r * 1.4);
+  ctx.restore();
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -278,15 +368,10 @@ function roundRect(ctx, x, y, w, h, r) {
 el("saveBtn").addEventListener("click", async () => {
   canvas.toBlob(async (blob) => {
     const file = new File([blob], "b-side.jpg", { type: "image/jpeg" });
-
-    // On iPhone, Web Share lets you save straight to Photos or send it.
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: "B-Side" });
-        return;
-      } catch { /* user cancelled; fall through to download */ }
+      try { await navigator.share({ files: [file], title: "B-Side" }); return; }
+      catch { /* cancelled → fall through to download */ }
     }
-    // Desktop fallback: download the image.
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "b-side.jpg";
@@ -296,14 +381,13 @@ el("saveBtn").addEventListener("click", async () => {
 
 // ---------- Startup ----------
 (async function init() {
-  // If we're returning from the Spotify login, finish that first.
   if (location.search.includes("code=")) {
     await Spotify.handleRedirect();
   }
   await refreshSpotifyUI();
   startCamera();
+  primeLocation();
 
-  // Register the service worker so the app is installable / works offline.
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   }

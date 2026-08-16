@@ -12,6 +12,8 @@ const Spotify = (() => {
 
   // The redirect URI is simply this page's own URL (no query/hash).
   const redirectUri = location.origin + location.pathname;
+  // Handy while setting up: this is the EXACT string Spotify must have registered.
+  console.log("[B-Side] Redirect URI to register in Spotify:", redirectUri);
 
   // ---- small helpers ---------------------------------------------------
   const randomString = (len) => {

@@ -24,25 +24,37 @@
       <button id="spotifyBtn" class="chip" type="button">Connect Spotify</button>
     </header>
 
-    <!-- Live camera preview -->
-    <section class="stage">
-      <video id="preview" class="preview" autoplay playsinline muted></video>
-      <canvas id="canvas" class="result" hidden></canvas>
+    <!-- The live "now playing" card. This is also what we render to save. -->
+    <section id="liveCard" class="card">
+      <div class="art">
+        <video id="preview" class="preview" autoplay playsinline muted></video>
+      </div>
 
-      <!-- Small "now playing" readout overlaid on the preview -->
-      <div id="nowPlaying" class="nowPlaying" hidden>
-        <img id="npArt" class="npArt" alt="" />
-        <div class="npText">
-          <div id="npTitle" class="npTitle">&mdash;</div>
-          <div id="npArtist" class="npArtist">&mdash;</div>
+      <div class="meta">
+        <div id="npTitle" class="title">No song</div>
+        <div id="npArtist" class="artist">&mdash;</div>
+        <div id="npAlbum" class="album">&mdash;</div>
+
+        <!-- Decorative player controls (they set the "music app" mood) -->
+        <div class="progress"><span class="bar"></span></div>
+        <div class="player">
+          <button class="pbtn" type="button" aria-hidden="true" tabindex="-1">&#9198;</button>
+          <button class="pbtn play" type="button" aria-hidden="true" tabindex="-1">&#9654;</button>
+          <button class="pbtn" type="button" aria-hidden="true" tabindex="-1">&#9197;</button>
         </div>
+
+        <div id="metaLine" class="metaLine">Locating&hellip;</div>
       </div>
     </section>
+
+    <!-- The finished, saveable image is drawn here -->
+    <canvas id="canvas" class="result" hidden></canvas>
 
     <!-- Manual song entry (used when Spotify has nothing / not connected) -->
     <section id="manualSong" class="manualSong" hidden>
       <input id="manualTitle" type="text" placeholder="Song title" />
       <input id="manualArtist" type="text" placeholder="Artist" />
+      <input id="manualAlbum" type="text" placeholder="Album (optional)" />
     </section>
 
     <p id="status" class="status">Point the camera and tap the shutter.</p>

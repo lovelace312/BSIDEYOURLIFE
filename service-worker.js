@@ -1,6 +1,6 @@
 // Minimal service worker: makes B-Side installable and lets the
 // app shell load offline. (Camera + Spotify still need a connection.)
-const CACHE = "bside-v1";
+const CACHE = "bside-v2";
 const ASSETS = [
   ".",
   "index.html",
@@ -33,7 +33,15 @@ self.addEventListener("fetch", (e) => {
   if (request.method !== "GET" || new URL(request.url).origin !== location.origin) {
     return;
   }
+  // Network-first: always try the live file (so edits show up immediately),
+  // and fall back to the cached copy when offline.
   e.respondWith(
-    caches.match(request).then((hit) => hit || fetch(request))
+    fetch(request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(request, copy));
+        return res;
+      })
+      .catch(() => caches.match(request))
   );
 });
