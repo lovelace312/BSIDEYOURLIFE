@@ -85,7 +85,7 @@ function stopCamera() {
   }
 }
 
-el("switchBtn").addEventListener("click", () => {
+el("flipBtn").addEventListener("click", () => {
   facing = facing === "environment" ? "user" : "environment";
   if (!captured) startCamera();
 });
@@ -134,7 +134,7 @@ async function primeLocation() {
 }
 
 // ---------- Shutter: take the photo ----------
-el("shutterBtn").addEventListener("click", async () => {
+el("captureBtn").addEventListener("click", async () => {
   if (!stream) { el("fileInput").click(); return; }   // no webcam → file picker
   status.textContent = "Capturing…";
 
@@ -172,12 +172,9 @@ function readManualSong() {
 function finishShot() {
   captured = true;
   stopCamera();
-  liveCard.hidden = true;
+  liveCard.hidden = true;     // hides the photo, controls, and flip button
   canvas.hidden = false;
   el("manualSong").hidden = true;
-  el("shutterBtn").hidden = true;
-  el("switchBtn").hidden = true;
-  el("retakeBtn").hidden = false;
   el("afterShot").hidden = false;
   status.textContent = "Nice shot. Save or share it below.";
 }
@@ -186,9 +183,6 @@ el("retakeBtn").addEventListener("click", () => {
   captured = false;
   liveCard.hidden = false;
   canvas.hidden = true;
-  el("shutterBtn").hidden = false;
-  el("switchBtn").hidden = false;
-  el("retakeBtn").hidden = true;
   el("afterShot").hidden = true;
   startCamera();
   refreshSpotifyUI();
