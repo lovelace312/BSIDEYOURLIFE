@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>B-Side</title>
+  <meta name="description" content="Capture a photo stamped with the song you're playing, where you are, and when." />
+
+  <!-- PWA / iOS home-screen setup -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0b0b12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="B-Side" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <h1 class="logo">B&#8209;Side</h1>
+      <button id="spotifyBtn" class="chip" type="button">Connect Spotify</button>
+    </header>
+
+    <!-- Live camera preview -->
+    <section class="stage">
+      <video id="preview" class="preview" autoplay playsinline muted></video>
+      <canvas id="canvas" class="result" hidden></canvas>
+
+      <!-- Small "now playing" readout overlaid on the preview -->
+      <div id="nowPlaying" class="nowPlaying" hidden>
+        <img id="npArt" class="npArt" alt="" />
+        <div class="npText">
+          <div id="npTitle" class="npTitle">&mdash;</div>
+          <div id="npArtist" class="npArtist">&mdash;</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Manual song entry (used when Spotify has nothing / not connected) -->
+    <section id="manualSong" class="manualSong" hidden>
+      <input id="manualTitle" type="text" placeholder="Song title" />
+      <input id="manualArtist" type="text" placeholder="Artist" />
+    </section>
+
+    <p id="status" class="status">Point the camera and tap the shutter.</p>
+
+    <div class="controls">
+      <button id="switchBtn" class="ghost" type="button" title="Flip camera">&#8635;</button>
+      <button id="shutterBtn" class="shutter" type="button" aria-label="Take photo"></button>
+      <button id="retakeBtn" class="ghost" type="button" title="Retake" hidden>&#8617;</button>
+    </div>
+
+    <div id="afterShot" class="afterShot" hidden>
+      <button id="saveBtn" class="primary" type="button">Save / Share</button>
+    </div>
+
+    <!-- Hidden file input: fallback if live camera isn't available -->
+    <input id="fileInput" type="file" accept="image/*" capture="environment" hidden />
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/spotify.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

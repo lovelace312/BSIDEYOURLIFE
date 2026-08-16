@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>B-Side icon maker</title>
+  <style>
+    body { font-family: -apple-system, "Segoe UI", sans-serif; background:#0b0b12; color:#eee; text-align:center; padding:40px; }
+    button { margin-top:20px; padding:12px 20px; font-size:16px; border:0; border-radius:10px;
+             background:linear-gradient(90deg,#1db954,#7c5cff); color:#fff; font-weight:700; cursor:pointer; }
+    p { color:#aaa; max-width:440px; margin:12px auto; line-height:1.5; }
+    canvas { display:none; }
+  </style>
+</head>
+<body>
+  <h1>B-Side icon maker</h1>
+  <p>Click the button. Your browser will download three PNG files:
+     <b>apple-touch-icon.png</b>, <b>icon-192.png</b>, and <b>icon-512.png</b>.
+     Move all three into the <code>icons/</code> folder next to this page.</p>
+  <button id="go">Generate &amp; download icons</button>
+  <canvas id="c"></canvas>
+
+  <script>
+    function draw(size) {
+      const c = document.getElementById("c");
+      c.width = c.height = size;
+      const ctx = c.getContext("2d");
+      const s = size / 512;
+
+      // background
+      ctx.fillStyle = "#0b0b12";
+      const r = 112 * s;
+      roundRect(ctx, 0, 0, size, size, r); ctx.fill();
+
+      // gradient stroke
+      const g = ctx.createLinearGradient(0, 0, size, size);
+      g.addColorStop(0, "#1db954"); g.addColorStop(1, "#7c5cff");
+
+      ctx.lineWidth = 18 * s; ctx.strokeStyle = g;
+      circle(ctx, 256*s, 256*s, 150*s); ctx.stroke();
+
+      ctx.lineWidth = 10 * s; ctx.strokeStyle = "rgba(255,255,255,0.14)";
+      circle(ctx, 256*s, 256*s, 104*s); ctx.stroke();
+
+      ctx.fillStyle = g; circle(ctx, 256*s, 256*s, 34*s); ctx.fill();
+      ctx.fillStyle = "#0b0b12"; circle(ctx, 256*s, 256*s, 10*s); ctx.fill();
+
+      ctx.fillStyle = "#fff";
+      ctx.font = `800 ${70*s}px -apple-system, "Segoe UI", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("B", 256*s, 452*s);
+      return c;
+    }
+    function circle(ctx,x,y,rad){ ctx.beginPath(); ctx.arc(x,y,rad,0,Math.PI*2); }
+    function roundRect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+    function download(size, name) {
+      draw(size).toBlob((b) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        a.download = name;
+        a.click();
+      }, "image/png");
+    }
+
+    document.getElementById("go").onclick = () => {
+      download(180, "apple-touch-icon.png");
+      download(192, "icon-192.png");
+      download(512, "icon-512.png");
+    };
+  </script>
+</body>
+</html>
