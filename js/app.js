@@ -66,16 +66,25 @@ function showTrackInCard(track) {
 // ---------- Camera ----------
 async function startCamera() {
   stopCamera();
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: facing },
-      audio: false,
-    });
-    preview.srcObject = stream;
-  } catch (e) {
-    console.error(e);
-    status.textContent = "Camera unavailable — tap the shutter to pick a photo instead.";
+  // Ask for the highest-resolution stream the camera will give us, then fall
+  // back to looser constraints if the device rejects the ideal ones.
+  const attempts = [
+    { audio: false, video: { facingMode: { ideal: facing }, width: { ideal: 2560 }, height: { ideal: 2560 } } },
+    { audio: false, video: { facingMode: facing } },
+    { audio: false, video: true },
+  ];
+  for (const constraints of attempts) {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      preview.srcObject = stream;
+      const t = stream.getVideoTracks()[0];
+      if (t) console.log("[B-Side] camera resolution:", t.getSettings().width, "x", t.getSettings().height);
+      return;
+    } catch (e) {
+      console.warn("[B-Side] camera constraint failed, trying looser:", e.name);
+    }
   }
+  status.textContent = "Camera unavailable — tap the play button to pick a photo instead.";
 }
 
 function stopCamera() {
@@ -194,8 +203,8 @@ el("retakeBtn").addEventListener("click", () => {
 //  small location · time footer — like a music-app share card.
 // ============================================================
 async function drawCard(source, track, place, when) {
-  const W = 1080;                       // card width in pixels
-  const u = W / 1080;                   // scale unit (in case W changes)
+  const W = 1440;                       // card width in pixels (higher = sharper)
+  const u = W / 1080;                   // scale unit (keeps text/layout proportional)
   const margin = 60 * u;                // gap around the framed photo
   const photo = W - margin * 2;         // square photo size
   const photoBottom = margin + photo;   // y where the photo ends
@@ -204,6 +213,7 @@ async function drawCard(source, track, place, when) {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";   // nicer scaling of the photo & album art
 
   // Card background
   ctx.fillStyle = "#12121c";
@@ -370,7 +380,7 @@ el("saveBtn").addEventListener("click", async () => {
     a.href = URL.createObjectURL(blob);
     a.download = "b-side.jpg";
     a.click();
-  }, "image/jpeg", 0.92);
+  }, "image/jpeg", 0.95);
 });
 
 // ---------- Startup ----------
